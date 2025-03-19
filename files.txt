@@ -1,0 +1,3 @@
+swagger-v2.json
+swagger.json
+swagger.yaml

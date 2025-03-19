@@ -16,21 +16,22 @@ import java.util.stream.Collectors;
 
 public class SwaggerExtractor {
     public static void main(String[] args) {
-        SwaggerExtractor extractor = new SwaggerExtractor("./repos.txt");
+        SwaggerExtractor extractor = new SwaggerExtractor("./repos.txt", "./files.txt");
     }
 
     private Path swaggerFile = null;
 
-    public SwaggerExtractor(String REPOS_LIST_FILE) {
-        var repoUrls = readRepoUrls(REPOS_LIST_FILE);
+    public SwaggerExtractor(String REPOS_LIST_FILE, String FILES_LIST_FILE) {
+        var repoUrls = readFile(REPOS_LIST_FILE);
+        var fileNames = readFile(FILES_LIST_FILE);
         int i = 0;
 
         for (String repoUrl : repoUrls) {
-            processRepository(repoUrl, i++);
+            processRepository(repoUrl, i++, fileNames);
         }
     }
 
-    private List<String> readRepoUrls(String filePath) {
+    private List<String> readFile(String filePath) {
         try {
             return Files.readAllLines(Paths.get(filePath));
         } catch (IOException e) {
@@ -38,19 +39,22 @@ public class SwaggerExtractor {
         }
     }
 
-    private void processRepository(String repoUrl, final int repoID) {
+    private void processRepository(String repoUrl, int repoID, List<String> fileNames) {
         try {
             var localRepo = Files.createDirectory(Path.of("./repo" + repoID)).toFile();
             runCommand(localRepo, "git", "clone", repoUrl, localRepo.getAbsolutePath());
 
-            swaggerFile = findSwaggerFile(localRepo.toPath());
-            if (swaggerFile == null) return;
+            swaggerFile = findSwaggerFile(localRepo.toPath(), fileNames);
+            if (swaggerFile == null) {
+                FileUtils.deleteDirectory(localRepo);
+                return;
+            }
 
             List<String> commits = getCommitHistory(localRepo);
 
             for (String commit : commits) {
                 runCommand(localRepo, "git", "checkout", commit, localRepo.getAbsolutePath());
-                swaggerFile = findSwaggerFile(localRepo.toPath());
+                swaggerFile = findSwaggerFile(localRepo.toPath(), fileNames);
                 saveSwaggerSpec(localRepo.getName(), commit, swaggerFile);
             }
             FileUtils.deleteDirectory(localRepo);
@@ -65,13 +69,12 @@ public class SwaggerExtractor {
         builder.redirectErrorStream(true);
         var process = builder.start();
         process.waitFor();
-
     }
 
-    private Path findSwaggerFile(Path repoPath) throws IOException {
+    private Path findSwaggerFile(Path repoPath, List<String> fileNames) throws IOException {
         try (var paths = Files.walk(repoPath)) {
             var swaggerFiles = paths
-                    .filter(p -> p.toString().equals("swagger.yaml") || p.toString().equals("swagger.yml") || p.toString().equals("swagger.json"))
+                    .filter(p -> fileNames.contains(p.getFileName().toString().toLowerCase()))
                     .toList();
 
             return swaggerFiles.isEmpty() ? null : swaggerFiles.get(0);
