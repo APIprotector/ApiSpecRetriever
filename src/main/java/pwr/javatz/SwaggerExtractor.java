@@ -55,7 +55,7 @@ public class SwaggerExtractor {
             for (String commit : commits) {
                 runCommand(localRepo, "git", "checkout", commit, localRepo.getAbsolutePath());
                 swaggerFile = findSwaggerFile(localRepo.toPath(), fileNames);
-                saveSwaggerSpec(localRepo.getName(), commit, swaggerFile);
+                saveSwaggerSpec(localRepo.getName(), getDateOfCommit(localRepo, commit), swaggerFile);
             }
             FileUtils.deleteDirectory(localRepo);
         } catch (Exception e) {
@@ -82,16 +82,23 @@ public class SwaggerExtractor {
     }
 
     private List<String> getCommitHistory(File repo) throws IOException {
-        ProcessBuilder builder = new ProcessBuilder("git", "log", "--reverse", "--pretty=format:%H", "--find-renames=100%", "--follow", "--", swaggerFile.toAbsolutePath().toString());
+        ProcessBuilder builder = new ProcessBuilder("git", "log", "--pretty=format:%H", "--find-renames=100%", "--follow", "--", swaggerFile.toAbsolutePath().toString());
         builder.directory(repo);
         Process process = builder.start();
         return new BufferedReader(new InputStreamReader(process.getInputStream())).lines().collect(Collectors.toList());
     }
 
-    private void saveSwaggerSpec(String repoName, String commitHash, Path swaggerFile) throws IOException {
+    private void saveSwaggerSpec(String repoName, String date, Path swaggerFile) throws IOException {
         Path outputDir = Paths.get("API Specki", repoName);
         Files.createDirectories(outputDir);
-        Path outputFile = outputDir.resolve("swagger_" + commitHash + ".json");
+        Path outputFile = outputDir.resolve("swagger_" + date + ".json");
         Files.copy(swaggerFile, outputFile, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private String getDateOfCommit(File repo, String commitHash) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder("git", "show", "-s", "--format=%ci", commitHash);
+        builder.directory(repo);
+        Process process = builder.start();
+        return new BufferedReader(new InputStreamReader(process.getInputStream())).lines().toList().get(0).substring(0, 10);
     }
 }
